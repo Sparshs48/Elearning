@@ -2,9 +2,9 @@ name: Build Only
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
@@ -18,14 +18,13 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: maven
 
       - name: Inject CI application.properties
         run: |
           mkdir -p src/main/resources
           cat <<EOF > src/main/resources/application.properties
-          # Use in-memory H2 so we don’t need a real DB on CI
           spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
           spring.datasource.driverClassName=org.h2.Driver
           spring.datasource.username=sa
@@ -38,7 +37,7 @@ jobs:
         run: mvn -B clean package -DskipTests
 
       - name: Upload JAR artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: e-learning-platform
           path: target/*.jar
