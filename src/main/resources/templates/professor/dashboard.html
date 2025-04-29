@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Professor Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .dashboard-container {
+            padding: 20px;
+        }
+        .course-item, .student-item, .assignment-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .description-section textarea {
+            width: 100%;
+            min-height: 100px;
+            margin: 10px 0;
+        }
+        #createAssignmentForm {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        #createAssignmentForm input,
+        #createAssignmentForm textarea {
+            width: 100%;
+            margin: 5px 0;
+            padding: 8px;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid red;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h2>Professor Dashboard</h2>
+        
+        <!-- Course Details -->
+        <div id="courseDetails">
+            <h3>My Course</h3>
+            <div id="courseContent"></div>
+        </div>
+
+        <!-- Student Management -->
+        <div id="studentManagement">
+            <h3>Enrolled Students</h3>
+            <div id="studentList"></div>
+        </div>
+
+        <!-- Assignment Management -->
+        <div id="assignmentManagement">
+            <h3>Assignments</h3>
+            <button onclick="showCreateAssignmentForm()">Create Assignment</button>
+            <div id="assignmentList"></div>
+            
+            <div id="createAssignmentForm" style="display: none;">
+                <form id="assignmentForm">
+                    <input type="text" id="assignmentTitle" placeholder="Title" required>
+                    <textarea id="assignmentDescription" placeholder="Description" required></textarea>
+                    <input type="datetime-local" id="dueDate" required>
+                    <button type="submit">Create Assignment</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lecture Notes -->
+        <div id="lectureNotes">
+            <h3>Lecture Notes</h3>
+            <form id="uploadNoteForm">
+                <input type="file" id="noteFile" required>
+                <input type="text" id="noteTitle" placeholder="Title" required>
+                <button type="submit">Upload</button>
+            </form>
+            <div id="notesList"></div>
+        </div>
+        
+        <button onclick="location.href='/logout'" class="logout-btn">Logout</button>
+    </div>
+
+    <script>
+        function loadProfessorCourse() {
+            fetch('/api/courses/professor', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to load course');
+                }
+                return response.json();
+            })
+            .then(course => {
+                console.log('Loaded course:', course);
+                const courseContent = document.getElementById('courseContent');
+                if (course && Object.keys(course).length > 0) {
+                    courseContent.innerHTML = `
+                        <div class="course-item">
+                            <h4>${course.title || 'Untitled'}</h4>
+                            <div class="description-section">
+                                <textarea id="courseDescription">${course.description || ''}</textarea>
+                                <button onclick="updateDescription()">Update Description</button>
+                            </div>
+                            <p>Maximum Students: ${course.maxStudents}</p>
+                            <p>Status: ${course.status}</p>
+                        </div>
+                    `;
+                } else {
+                    courseContent.innerHTML = '<p>No course assigned yet</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('courseContent').innerHTML = 
+                    `<p class="error">Failed to load course details: ${error.message}</p>`;
+            });
+        }
+
+        function loadEnrolledStudents() {
+            fetch('/api/courses/professor/students', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to load students');
+                }
+                return response.json();
+            })
+            .then(students => {
+                const studentList = document.getElementById('studentList');
+                studentList.innerHTML = students.length ? 
+                    students.map(student => `
+                        <div class="student-item">
+                            <span>${student.username}</span>
+                            <span>${student.email}</span>
+                        </div>
+                    `).join('') : '<p>No students enrolled</p>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('studentList').innerHTML = 
+                    `<p class="error">Failed to load students: ${error.message}</p>`;
+            });
+        }
+
+        function loadSubmissions(assignmentId) {
+            fetch(`/api/submissions/assignment/${assignmentId}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to load submissions');
+                }
+                return response.json();
+            })
+            .then(submissions => {
+                const submissionsList = document.getElementById(`submissions-${assignmentId}`);
+                submissionsList.innerHTML = submissions.length ? 
+                    submissions.map(submission => `
+                        <div class="submission-item">
+                            <p>Student: ${submission.student.username}</p>
+                            <p>Submitted: ${new Date(submission.submissionDate).toLocaleString()}</p>
+                            <p>Status: ${submission.status}</p>
+                            <button onclick="downloadSubmission(${submission.id})">
+                                Download Submission
+                            </button>
+                            <div class="grading-section">
+                                <input type="number" 
+                                       id="grade-${submission.id}" 
+                                       value="${submission.grade || ''}" 
+                                       min="0" 
+                                       max="100" 
+                                       placeholder="Grade">
+                                <textarea id="feedback-${submission.id}" 
+                                          placeholder="Feedback">${submission.feedback || ''}</textarea>
+                                <button onclick="submitGrade(${submission.id})">
+                                    Submit Grade
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : '<p>No submissions yet</p>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById(`submissions-${assignmentId}`).innerHTML = 
+                    `<p class="error">Error loading submissions: ${error.message}</p>`;
+            });
+        }
+
+        async function downloadSubmission(submissionId) {
+            try {
+                const response = await fetch(`/api/submissions/download/${submissionId}`, { credentials: 'include' });
+                if (!response.ok) throw new Error('Failed to download submission');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `submission_${submissionId}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error downloading submission: ${error.message}`);
+            }
+        }
+
+
+        function submitGrade(submissionId) {
+            const grade = document.getElementById(`grade-${submissionId}`).value;
+            const feedback = document.getElementById(`feedback-${submissionId}`).value;
+
+            if (!grade) {
+                alert('Please enter a grade');
+                return;
+            }
+
+            const gradeData = {
+                grade: parseFloat(grade),
+                feedback: feedback
+            };
+
+            fetch(`/api/submissions/${submissionId}/grade`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(gradeData)
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to submit grade');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Grade submitted successfully');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting grade: ' + error.message);
+            });
+        }
+
+
+        function showCreateAssignmentForm() {
+            document.getElementById('createAssignmentForm').style.display = 'block';
+        }
+        
+        function updateDescription() {
+            const description = document.getElementById('courseDescription').value;
+            
+            fetch('/api/courses/professor/description', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    description: description
+                })
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to update description');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Course description updated successfully');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating description: ' + error.message);
+            });
+        }
+
+        
+        function loadAssignments() {
+            fetch('/api/courses/professor/assignments/load', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to load assignments');
+                }
+                return response.json();
+            })
+            .then(assignments => {
+                const assignmentList = document.getElementById('assignmentList');
+                assignmentList.innerHTML = Array.isArray(assignments) && assignments.length ? 
+                    assignments.map(assignment => `
+                        <div class="assignment-item">
+                            <h4>${assignment.title}</h4>
+                            <p>${assignment.description}</p>
+                            <p>Due: ${new Date(assignment.dueDate).toLocaleString()}</p>
+                            
+                            <!-- Add Submissions Section -->
+                            <div class="submissions-section">
+                                <h5>Submissions</h5>
+                                <button onclick="loadSubmissions(${assignment.id})">View Submissions</button>
+                                <div id="submissions-${assignment.id}" class="submissions-list"></div>
+                            </div>
+                        </div>
+                    `).join('') : '<p>No assignments created yet</p>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('assignmentList').innerHTML = 
+                    `<p class="error">Error loading assignments: ${error.message}</p>`;
+            });
+        }
+
+
+        document.getElementById('assignmentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const dueDate = new Date(document.getElementById('dueDate').value);
+            
+            const assignmentData = {
+                title: document.getElementById('assignmentTitle').value,
+                description: document.getElementById('assignmentDescription').value,
+                dueDate: dueDate.toISOString()
+            };
+
+            fetch('/api/courses/professor/assignments', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(assignmentData)
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to create assignment');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Assignment created successfully');
+                document.getElementById('assignmentForm').reset();
+                document.getElementById('createAssignmentForm').style.display = 'none';
+                loadAssignments();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error creating assignment: ' + error.message);
+            });
+        });
+
+        document.getElementById('uploadNoteForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', document.getElementById('noteFile').files[0]);
+            formData.append('title', document.getElementById('noteTitle').value);
+
+            fetch('/api/courses/professor/notes/upload', {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to upload note');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Note uploaded successfully');
+                document.getElementById('uploadNoteForm').reset();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error uploading note: ' + error.message);
+            });
+        });
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProfessorCourse();
+            loadEnrolledStudents();
+            loadAssignments();
+        });
+    </script>
+</body>
+</html>

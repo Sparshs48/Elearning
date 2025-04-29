@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC 
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="com.example.demo.model.Course" table="courses">
+        <id name="id" type="long" column="id">
+            <generator class="identity"/>
+        </id>
+        <property name="title" type="string">
+            <column name="title" not-null="true"/>
+        </property>
+        <property name="description" type="text">
+            <column name="description"/>
+        </property>
+        <many-to-one name="professor" class="com.example.demo.model.User">
+            <column name="professor_id" not-null="true"/>
+        </many-to-one>
+        <property name="maxStudents" type="integer">
+            <column name="max_students" default="3"/>
+        </property>
+        <property name="status" type="string">
+            <column name="status" not-null="true"/>
+        </property>
+        <bag name="assignments" inverse="true" cascade="all">
+            <key column="course_id"/>
+            <one-to-many class="com.example.demo.model.Assignment"/>
+        </bag>
+    </class>
+</hibernate-mapping>

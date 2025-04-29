@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .dashboard-container {
+            padding: 20px;
+        }
+        .course-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .assignment-section {
+            margin-top: 15px;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .assignment-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .submission-form {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .grade-info {
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        .past-due {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h2>Student Dashboard</h2>
+        
+        <!-- Available Courses Section -->
+        <div class="courses-section">
+            <h3>Available Courses</h3>
+            <div id="availableCourses"></div>
+        </div>
+
+        <!-- Enrolled Courses Section -->
+        <div class="enrolled-section">
+            <h3>My Enrolled Courses</h3>
+            <div id="enrolledCourses"></div>
+        </div>
+        
+        <!-- Lecture Notes Section -->
+<div class="notes-section">
+    <h5>Lecture Notes</h5>
+    <div id="lectureNotes"></div>
+</div>
+        
+
+<div class="grades-section">
+            <h3>My Grades</h3>
+            <div id="grades"></div> <!-- Add this section to display grades -->
+        </div>
+
+        <button onclick="location.href='/logout'">Logout</button>
+    </div>
+
+    <script>
+        function loadAvailableCourses() {
+            fetch('/api/enrollments/available', {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(courses => {
+                const container = document.getElementById('availableCourses');
+                container.innerHTML = courses.length ? 
+                    courses.map(course => `
+                        <div class="course-card">
+                            <h4>${course.title}</h4>
+                            <p>${course.description}</p>
+                            <p>Professor: ${course.professor.username}</p>
+                            <p>Available Slots: ${course.maxStudents}</p>
+                            <button onclick="enrollCourse(${course.id})">Enroll</button>
+                            <button onclick="downloadDescription(${course.id})">Download Description</button>
+                        </div>
+                    `).join('') : '<p>No courses available</p>';
+            })
+            .catch(error => alert('Error loading courses: ' + error.message));
+        }
+
+        function loadEnrolledCourses() {
+            fetch('/api/enrollments/student', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(enrollments => {
+                const container = document.getElementById('enrolledCourses');
+                const activeEnrollments = enrollments.filter(enrollment => 
+                    enrollment.status === 'ACTIVE'
+                );
+                
+                container.innerHTML = activeEnrollments.length ?
+                    activeEnrollments.map(enrollment => `
+                        <div class="course-card">
+                            <h4>${enrollment.course.title}</h4>
+                            <p>${enrollment.course.description}</p>
+                            <p>Professor: ${enrollment.course.professor.username}</p>
+                            <p>Enrolled: ${new Date(enrollment.enrollmentDate).toLocaleDateString()}</p>
+                            <button onclick="dropCourse(${enrollment.id})">Drop Course</button>
+                            
+                            <div class="assignment-section">
+                                <h5>Assignments</h5>
+                                ${enrollment.course.assignments && enrollment.course.assignments.length ? 
+                                    enrollment.course.assignments.map(assignment => {
+                                        const dueDate = new Date(assignment.dueDate);
+                                        const isPastDue = new Date() > dueDate;
+
+                                        return `
+                                            <div class="assignment-item">
+                                                <h6>${assignment.title}</h6>
+                                                <p>${assignment.description}</p>
+                                                <p class="${isPastDue ? 'past-due' : ''}">
+                                                    Due: ${dueDate.toLocaleString()}
+                                                </p>
+                                                ${assignment.submission ? `
+                                                    <div class="submission-status" style="background-color: #f0f8ff; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                                                        <p><strong>Status:</strong> ${assignment.submission.status}</p>
+                                                        ${assignment.submission.grade !== null ? 
+                                                            `<p class="grade-info"><strong>Grade:</strong> ${assignment.submission.grade}/100</p>` : 
+                                                            '<p class="grade-info">Not graded yet</p>'
+                                                        }
+                                                        ${assignment.submission.feedback ? 
+                                                            `<p><strong>Feedback:</strong> ${assignment.submission.feedback}</p>` : 
+                                                            '<p>No feedback provided</p>'
+                                                        }
+                                                    </div>
+                                                ` : !isPastDue ? `
+                                                    <form onsubmit="submitAssignment(event, ${assignment.id})" 
+                                                          class="submission-form">
+                                                        <input type="file" required>
+                                                        <button type="submit">Submit</button>
+                                                    </form>
+                                                ` : '<p class="past-due">Submission period ended</p>'}
+                                            </div>
+                                        `;
+                                    }).join('') : 
+                                    '<p>No assignments available</p>'
+                                }
+                            </div>
+                        </div>
+                    `).join('') : '<p>No enrolled courses</p>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                container.innerHTML = `<p class="error">Error loading enrollments: ${error.message}</p>`;
+            });
+        }
+        
+     // Fetching and displaying grades
+        function loadGrades() {
+            fetch('/api/submissions/student/grades', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(grades => {
+                const container = document.getElementById('grades');
+                if (container) {
+                    container.innerHTML = grades.length ? 
+                        grades.map(grade => `
+                            <div class="assignment-item">
+                                <h6>${grade.assignmentTitle}</h6>
+                                <p><strong>Grade:</strong> ${grade.grade}/100</p>
+                                <p><strong>Feedback:</strong> ${grade.feedback || 'No feedback provided'}</p>
+                            </div>
+                        `).join('') : '<p>No grades available</p>';
+                } else {
+                    console.error("Grades container not found!");
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error loading grades: ' + error.message);
+            });
+        }
+
+        function submitAssignment(event, assignmentId) {
+            event.preventDefault();
+            const form = event.target;
+            const fileInput = form.querySelector('input[type="file"]');
+            
+            if (!fileInput.files[0]) {
+                alert('Please select a file to submit');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch(`/api/submissions/assignment/${assignmentId}`, {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || 'Failed to submit assignment');
+                    });
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Assignment submitted successfully');
+                form.reset();
+                loadEnrolledCourses();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error submitting assignment: ' + error.message);
+            });
+        }
+        
+        function loadLectureNotes() {
+            fetch('/api/courses/student/notes', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(notes => {
+                const container = document.getElementById('lectureNotes');
+                container.innerHTML = notes.length ? 
+                    notes.map(note => `
+                        <div class="note-item">
+                            <h6>${note.title}</h6>
+                            <p>Uploaded: ${new Date(note.uploadDate).toLocaleString()}</p>
+                            <p>File: ${note.filePath.split('/').pop()}</p>
+                            <button onclick="downloadNote(${note.id})">
+                                Download Note
+                            </button>
+                        </div>
+                    `).join('') : '<p>No lecture notes available</p>';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('lectureNotes').innerHTML = 
+                    `<p class="error">Error loading notes: ${error.message}</p>`;
+            });
+        }
+
+
+        async function downloadNote(noteId) {
+            try {
+                const response = await fetch(`/api/courses/notes/${noteId}/download`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to download note');
+                }
+                
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('content-disposition');
+                const filename = contentDisposition ? 
+                    contentDisposition.split('filename=')[1].replace(/"/g, '') : 
+                    `note_${noteId}`;
+                    
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error downloading note: ' + error.message);
+            }
+        }
+        function enrollCourse(courseId) {
+            fetch(`/api/enrollments/enroll/${courseId}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to enroll in course');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Successfully enrolled in course');
+                loadAvailableCourses();
+                loadEnrolledCourses();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error enrolling in course: ' + error.message);
+            });
+        }
+
+        function dropCourse(enrollmentId) {
+            if (!confirm('Are you sure you want to drop this course?')) {
+                return;
+            }
+
+            fetch(`/api/enrollments/${enrollmentId}/drop`, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(response.statusText || 'Failed to drop course');
+                }
+                if (response.status === 204) {
+                    return null; // No content
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('Successfully dropped course');
+                loadAvailableCourses();
+                loadEnrolledCourses();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error dropping course: ' + error.message);
+            });
+        }
+
+
+
+        // Keep existing functions (enrollCourse, dropCourse, downloadDescription)
+        
+        // Load courses when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    loadAvailableCourses();
+    loadEnrolledCourses();
+    loadGrades();
+    loadLectureNotes();
+});
+
+    </script>
+</body>
+</html>

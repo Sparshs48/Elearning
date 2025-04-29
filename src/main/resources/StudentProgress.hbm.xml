@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC 
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="com.example.demo.model.StudentProgress" table="student_progress">
+        <id name="id" type="long" column="id">
+            <generator class="identity"/>
+        </id>
+        <many-to-one name="student" class="com.example.demo.model.User">
+            <column name="student_id" not-null="true"/>
+        </many-to-one>
+        <many-to-one name="course" class="com.example.demo.model.Course">
+            <column name="course_id" not-null="true"/>
+        </many-to-one>
+        <property name="assignmentsCompleted" type="integer">
+            <column name="assignments_completed"/>
+        </property>
+        <property name="totalAssignments" type="integer">
+            <column name="total_assignments"/>
+        </property>
+        <property name="averageGrade" type="double">
+            <column name="average_grade"/>
+        </property>
+    </class>
+</hibernate-mapping>

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <h2>Admin Dashboard</h2>
+        <div class="admin-actions">
+            <button onclick="showCreateProfessorForm()">Create Professor</button>
+            <button onclick="showUserManagement()">Manage Users</button>
+            <button onclick="location.href='/logout'">Logout</button>
+        </div>
+<div class="admin-actions">
+    <button onclick="showCreateProfessorForm()">Create Professor</button>
+    <button onclick="showCreateCourseForm()">Create Course</button>
+    <button onclick="showUserManagement()">Manage Users</button>
+    <button onclick="location.href='/logout'">Logout</button>
+</div>
+        <!-- Professor Creation Form -->
+        <div id="createProfessorForm" style="display: none;">
+            <h3>Create Professor</h3>
+            <form id="professorForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit">Create</button>
+            </form>
+        </div>
+
+		<!-- Course Creation Form -->
+<div id="createCourseForm" style="display: none;">
+    <h3>Create Course</h3>
+    <form id="courseForm">
+        <div class="form-group">
+            <label for="courseTitle">Title:</label>
+            <input type="text" id="courseTitle" required>
+        </div>
+        <div class="form-group">
+            <label for="courseDescription">Description:</label>
+            <textarea id="courseDescription" required></textarea>
+        </div>
+        <div class="form-group">
+            <label for="professorId">Assign Professor:</label>
+            <select id="professorId" required>
+                <!-- Will be populated dynamically -->
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="maxStudents">Maximum Students:</label>
+            <input type="number" id="maxStudents" value="3" min="1" required>
+        </div>
+        <button type="submit">Create Course</button>
+    </form>
+</div>
+
+        <!-- User Management Section -->
+        <div id="userManagement" style="display: none;">
+            <h3>User Management</h3>
+            <div class="filters">
+                <select id="roleFilter" onchange="filterUsers()">
+                    <option value="">All Roles</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="PROFESSOR">Professor</option>
+                    <option value="STUDENT">Student</option>
+                </select>
+                <select id="statusFilter" onchange="filterUsers()">
+                    <option value="ACTIVE">Active Users</option>
+                    <option value="UNACTIVE">Inactive Users</option>
+                </select>
+                <input type="text" id="searchInput" placeholder="Search users..." 
+                       onkeyup="searchUsers()">
+            </div>
+            <div class="users-list" id="usersList">
+                <!-- Users will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showCreateProfessorForm() {
+            document.getElementById('createProfessorForm').style.display = 'block';
+            document.getElementById('userManagement').style.display = 'none';
+        }
+
+        document.getElementById('professorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const professorData = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+                email: document.getElementById('email').value,
+                role: "PROFESSOR",
+                status: "ACTIVE",
+                createdAt: new Date().toISOString()
+            };
+
+            fetch('/api/register/professor', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(professorData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || response.statusText);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('Professor created successfully!');
+                document.getElementById('professorForm').reset();
+                document.getElementById('createProfessorForm').style.display = 'none';
+            })
+            .catch(error => {
+                alert('Error creating professor: ' + error.message);
+            });
+        });
+        
+        function showUserManagement() {
+            document.getElementById('userManagement').style.display = 'block';
+            document.getElementById('createProfessorForm').style.display = 'none';
+            loadUsers();
+        }
+
+        function filterUsers() {
+            const role = document.getElementById('roleFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const params = [];
+            
+            if (role) params.push(`role=${role}`);
+            if (status) params.push(`status=${status}`);
+            
+            loadUsers(params.length ? '?' + params.join('&') : '');
+        }
+
+        let searchTimeout;
+        function searchUsers() {
+            clearTimeout(searchTimeout);
+            const searchTerm = document.getElementById('searchInput').value;
+            
+            searchTimeout = setTimeout(() => {
+                const params = new URLSearchParams();
+                
+                // Add search term if exists
+                if (searchTerm) {
+                    params.append('search', searchTerm);
+                }
+                
+                // Add role filter if selected
+                const roleFilter = document.getElementById('roleFilter').value;
+                if (roleFilter) {
+                    params.append('role', roleFilter);
+                }
+                
+                // Add status filter if selected
+                const statusFilter = document.getElementById('statusFilter').value;
+                if (statusFilter) {
+                    params.append('status', statusFilter);
+                }
+                
+                // Add pagination parameters
+                params.append('page', 0); // Reset to first page on search
+                params.append('size', pageSize);
+                
+                loadUsers('?' + params.toString());
+            }, 300); // Debounce time: 300ms
+        }
+
+        function deleteUser(userId) {
+            if (confirm('Are you sure you want to deactivate this user?')) {
+                fetch(`/api/manage/users/${userId}/deactivate`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to deactivate user');
+                    }
+                    loadUsers();
+                })
+                .catch(error => {
+                    alert('Error deactivating user: ' + error.message);
+                });
+            }
+        }
+        
+        let currentPage = 0;
+        const pageSize = 5;
+
+        function loadUsers(params = '') {
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '<p>Loading...</p>';
+
+            fetch('/api/manage/users' + params, {
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load users');
+                }
+                return response.json();
+            })
+            .then(data => {
+                usersList.innerHTML = '';
+                
+                if (data.content.length === 0) {
+                    usersList.innerHTML = '<p>No users found</p>';
+                    return;
+                }
+
+                data.content.forEach(user => {
+                    const isAdmin = user.role === 'ADMIN';
+                    const isActive = user.status === 'ACTIVE';
+                    usersList.innerHTML += `
+                        <div class="user-item ${user.status.toLowerCase()}">
+                            <span>${user.username}</span>
+                            <span>${user.email}</span>
+                            <span>${user.role}</span>
+                            <span class="status-${user.status.toLowerCase()}">${user.status}</span>
+                            ${!isAdmin ? 
+                                isActive ? 
+                                    `<button onclick="deleteUser(${user.id})">Deactivate</button>` : 
+                                    `<button onclick="activateUser(${user.id})">Activate</button>`
+                                : '<span class="admin-badge">Admin</span>'
+                            }
+                        </div>
+                    `;
+                });
+
+                // Add pagination controls
+                const paginationDiv = document.createElement('div');
+                paginationDiv.className = 'pagination';
+                paginationDiv.innerHTML = `
+                    <button ${data.first ? 'disabled' : ''} onclick="loadPreviousPage()">Previous</button>
+                    <span>Page ${data.number + 1} of ${data.totalPages}</span>
+                    <button ${data.last ? 'disabled' : ''} onclick="loadNextPage()">Next</button>
+                `;
+                usersList.appendChild(paginationDiv);
+                
+                currentPage = data.number;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                usersList.innerHTML = `<p class="error">Error loading users: ${error.message}</p>`;
+            });
+        }
+        function activateUser(userId) {
+            if (confirm('Are you sure you want to activate this user?')) {
+                fetch(`/api/manage/users/${userId}/activate`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to activate user');
+                    }
+                    loadUsers();
+                })
+                .catch(error => {
+                    alert('Error activating user: ' + error.message);
+                });
+            }
+        }        
+        function loadProfessors() {
+            fetch('/api/manage/users?role=PROFESSOR&status=ACTIVE', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to load professors');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Check if data is paginated
+                const professors = data.content || data;
+                
+                if (!Array.isArray(professors)) {
+                    throw new Error('Invalid professors data received');
+                }
+
+                const select = document.getElementById('professorId');
+                select.innerHTML = '<option value="">Select Professor</option>';
+                
+                professors.forEach(prof => {
+                    select.innerHTML += `
+                        <option value="${prof.id}">${prof.username}</option>
+                    `;
+                });
+            })
+            .catch(error => {
+                console.error('Error loading professors:', error);
+                const select = document.getElementById('professorId');
+                select.innerHTML = '<option value="">Error loading professors</option>';
+                alert('Error loading professors: ' + error.message);
+            });
+        }
+        document.getElementById('courseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const courseData = {
+                title: document.getElementById('courseTitle').value,
+                description: document.getElementById('courseDescription').value,
+                maxStudents: parseInt(document.getElementById('maxStudents').value)
+            };
+            
+            const professorId = document.getElementById('professorId').value;
+            if (!professorId) {
+                alert('Please select a professor');
+                return;
+            }
+
+            fetch(`/api/courses/create?professorId=${professorId}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(courseData)
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || 'Failed to create course');
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('Course created successfully!');
+                document.getElementById('courseForm').reset();
+                document.getElementById('createCourseForm').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error creating course: ' + error.message);
+            });
+        });
+        
+        function showCreateCourseForm() {
+            document.getElementById('createCourseForm').style.display = 'block';
+            document.getElementById('createProfessorForm').style.display = 'none';
+            document.getElementById('userManagement').style.display = 'none';
+            loadProfessors(); // Load professors for the dropdown
+        }
+        
+        function loadPreviousPage() {
+            if (currentPage > 0) {
+                const searchTerm = document.getElementById('searchInput').value;
+                const roleFilter = document.getElementById('roleFilter').value;
+                const statusFilter = document.getElementById('statusFilter').value;
+                
+                const params = new URLSearchParams();
+                if (searchTerm) params.append('search', searchTerm);
+                if (roleFilter) params.append('role', roleFilter);
+                if (statusFilter) params.append('status', statusFilter);
+                params.append('page', currentPage - 1);
+                params.append('size', pageSize);
+                
+                loadUsers('?' + params.toString());
+            }
+        }
+
+        function loadNextPage() {
+            const searchTerm = document.getElementById('searchInput').value;
+            const roleFilter = document.getElementById('roleFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            const params = new URLSearchParams();
+            if (searchTerm) params.append('search', searchTerm);
+            if (roleFilter) params.append('role', roleFilter);
+            if (statusFilter) params.append('status', statusFilter);
+            params.append('page', currentPage + 1);
+            params.append('size', pageSize);
+            
+            loadUsers('?' + params.toString());
+        }
+    </script>
+</body>
+</html>

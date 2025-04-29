@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC 
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+<hibernate-mapping>
+    <class name="com.example.demo.model.Assignment" table="assignments">
+        <id name="id" type="long" column="id">
+            <generator class="identity"/>
+        </id>
+        <property name="title" type="string">
+            <column name="title" not-null="true"/>
+        </property>
+        <property name="description" type="text">
+            <column name="description"/>
+        </property>
+        <many-to-one name="course" class="com.example.demo.model.Course">
+            <column name="course_id" not-null="true"/>
+        </many-to-one>
+        <property name="dueDate" type="java.time.LocalDateTime">
+            <column name="due_date"/>
+        </property>
+        <property name="filePath" type="string">
+            <column name="file_path"/>
+        </property>
+        <property name="status" type="string">
+            <column name="status" not-null="true"/>
+        </property>
+    </class>
+</hibernate-mapping>
