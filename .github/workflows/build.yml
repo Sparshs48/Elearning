@@ -73,4 +73,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/Sparshs48/e-learning-platform:latest
+          tags: ghcr.io/Sparshs48/elearning:latest
