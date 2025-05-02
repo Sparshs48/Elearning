@@ -1,5 +1,7 @@
 name: Build & Publish Docker
-
+permissions:
+  contents: read # we still need to read your repo
+  packages: write
 on:
   push:
     branches:
