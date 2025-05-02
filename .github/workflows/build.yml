@@ -2,15 +2,15 @@ name: Build & Publish Docker
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      jar-path: ${{ steps.package.outputs.jar }}
 
     steps:
       - name: Checkout source
@@ -67,11 +67,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build & Push Docker Image
+      - name: Build & Push Docker Image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ghcr.io/Sparshs48/e-learning-platform:latest
-
