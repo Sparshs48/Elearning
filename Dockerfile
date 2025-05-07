@@ -12,3 +12,7 @@ EXPOSE 8888
 
 # Run the JAR (relative to WORKDIR)
 ENTRYPOINT ["java","-jar","app.jar"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --spider http://localhost:8888/actuator/health || exit 1
+
