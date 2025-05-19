@@ -1,18 +1,17 @@
-# Use a lightweight Java 17 runtime
-FROM eclipse-temurin:17-jre-alpine
-
-# Create and switch to /app
+# Stage 1: Build the JAR
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-# Copy the built JAR (from target/) into the image as app.jar
-COPY target/*.jar app.jar
+# Stage 2: Run the JAR
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
 
-# Expose the port your Spring Boot app listens on (default 8888)
 EXPOSE 8888
-
-# Run the JAR (relative to WORKDIR)
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --spider http://localhost:8888/actuator/health || exit 1
-
